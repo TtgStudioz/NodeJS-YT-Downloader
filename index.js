@@ -3,7 +3,6 @@ const ytdl = require('@distube/ytdl-core');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 const cors = require('cors');
-const puppeteer = require('puppeteer');
 const { PassThrough } = require('stream');
 
 const app = express();
