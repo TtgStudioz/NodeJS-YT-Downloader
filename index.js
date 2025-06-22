@@ -12,28 +12,24 @@ const PORT = 3000;
 ffmpeg.setFfmpegPath(ffmpegPath);
 app.use(cors());
 
+const { chromium } = require('playwright');
+
 async function getBypassUrl(videoURL) {
   try {
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
+    const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
-    await page.goto(videoURL, { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.goto(videoURL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // Wait for player to load (basic check)
-    await page.waitForSelector('video, ytd-player', { timeout: 10000 });
-
-    const finalUrl = page.url(); // in case YouTube redirected
-
+    const finalUrl = page.url(); // YouTube may redirect
     await browser.close();
+
     return finalUrl;
   } catch (error) {
-    console.error('[Puppeteer Error]', error.message);
+    console.error('[Playwright Error]', error.message);
     return null;
   }
 }
+
 
 // ✅ Main Endpoint
 app.get('/api/download-mp3', async (req, res) => {
