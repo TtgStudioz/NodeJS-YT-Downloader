@@ -2,23 +2,50 @@ const express = require('express');
 const ytdl = require('@distube/ytdl-core');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
-const cors = require('cors'); // ✅ To support fetch from JS
+const cors = require('cors');
+const puppeteer = require('puppeteer');
 const { PassThrough } = require('stream');
 
 const app = express();
 const PORT = 3000;
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+app.use(cors());
 
-app.use(cors()); // ✅ Enable CORS for all routes
+async function getBypassUrl(videoURL) {
+  try {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
 
-// ✅ API Endpoint: Get MP3 as Stream (for fetch)
+    const page = await browser.newPage();
+    await page.goto(videoURL, { waitUntil: 'networkidle2', timeout: 60000 });
+
+    // Wait for player to load (basic check)
+    await page.waitForSelector('video, ytd-player', { timeout: 10000 });
+
+    const finalUrl = page.url(); // in case YouTube redirected
+
+    await browser.close();
+    return finalUrl;
+  } catch (error) {
+    console.error('[Puppeteer Error]', error.message);
+    return null;
+  }
+}
+
+// ✅ Main Endpoint
 app.get('/api/download-mp3', async (req, res) => {
   try {
-    const videoURL = req.query.url;
+    let videoURL = req.query.url;
+    if (!videoURL) return res.status(400).json({ error: 'Missing YouTube URL' });
+
+    // Try bypassing bot protection
+    videoURL = await getBypassUrl(videoURL) || videoURL;
 
     if (!ytdl.validateURL(videoURL)) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
+      return res.status(400).json({ error: 'Invalid YouTube URL (after bypass)' });
     }
 
     const info = await ytdl.getInfo(videoURL);
@@ -29,7 +56,7 @@ app.get('/api/download-mp3', async (req, res) => {
     audioStream.pipe(audioPipe);
 
     res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('X-Filename', `${title}.mp3`); // Optional custom header
+    res.setHeader('X-Filename', `${title}.mp3`);
 
     ffmpeg(audioPipe)
       .audioBitrate(128)
